@@ -1,12 +1,19 @@
+import numpy as np 
+from math import cos, sin, atan2, acos
+import rospy
+
 class MotionModel:
 
     def __init__(self):
+        # self.ODOM_TOPIC 
 
         ####################################
         # TODO
         # Do any precomputation for the motion
         # model here.
 
+        # rospy.get_param()
+        # sub = rospy.Subscriber(self.ODOM_TOPIC, LaserScan, self.callback)
         pass
 
         ####################################
@@ -31,8 +38,37 @@ class MotionModel:
         """
         
         ####################################
-        # TODO
+        N = particles.shape[0]
+        result = np.zeros_like(particles)
+        for i in range(N):
+            odom_T = self.get_rotation_mat(odometry[0], odometry[1], odometry[2])
+            particle_T = self.get_rotation_mat(particles[i, 0], particles[i, 1], particles[i, 2])
+            # result[i, :] = np.dot(particles[i, :], odom_T) #(1,3) * (3,3) = (1,3)
+            future_particle_T =  np.dot(particle_T, odom_T) #(3,3) * (3,3) = (3,3)
+            #theta = acos(future_particle_T[1,1])
+            future_theta = (particles[i,2]) + odometry[2]
+            result[i, :] = np.array([[future_particle_T[0,2], future_particle_T[1,2], future_theta]]) #self.get_state(future_particle_T, odometry[2])
 
-        raise NotImplementedError
+
 
         ####################################
+        return result
+
+    def get_rotation_mat(self, x, y, theta):
+        #return 1x3
+        result = np.zeros((3,3))
+        result[0,0] = cos(theta)
+        result[0,1] = -sin(theta)
+        result[1,0] = sin(theta)
+        result[1,1] = cos(theta)
+
+        result[0,2] = x
+        result[1,2] = y
+        result[2,2] = 1
+        return result
+
+    # def get_state(self, mat, dtheta):
+    #     theta = acos(mat[1,0]) #atan2(mat[1,0], mat[0,0])
+    #     # theta += 
+    #     theta += dtheta
+    #     return np.array([[mat[0,2], mat[1,2], theta]])
