@@ -40,32 +40,33 @@ class MotionModel:
         ####################################
         N = particles.shape[0]
         result = np.zeros_like(particles)
-        for i in range(N):
-            odom_T = self.get_rotation_mat(odometry[0], odometry[1], odometry[2])
-            particle_T = self.get_rotation_mat(particles[i, 0], particles[i, 1], particles[i, 2])
-            # result[i, :] = np.dot(particles[i, :], odom_T) #(1,3) * (3,3) = (1,3)
-            future_particle_T =  np.dot(particle_T, odom_T) #(3,3) * (3,3) = (3,3)
-            #theta = acos(future_particle_T[1,1])
-            future_theta = (particles[i,2]) + odometry[2]
-            result[i, :] = np.array([[future_particle_T[0,2], future_particle_T[1,2], future_theta]]) #self.get_state(future_particle_T, odometry[2])
+        result[:, 0] = odometry[0]*np.cos(particles[:, 2]) + odometry[1]*-np.sin(particles[:, 2]) + particles[:, 0]
+        result[:, 1] = odometry[0]*np.sin(particles[:, 2]) + odometry[1]*np.cos(particles[:, 2]) + particles[:, 1]
+        result[:, 2] = odometry[2] + particles[:, 2]
 
-
-
+        # for i in range(N):
+        #     odom_T = self.get_rotation_mat(odometry[0], odometry[1], odometry[2])
+        #     particle_T = self.get_rotation_mat(particles[i, 0], particles[i, 1], particles[i, 2])
+        #     # result[i, :] = np.dot(particles[i, :], odom_T) #(1,3) * (3,3) = (1,3)
+        #     future_particle_T =  np.dot(particle_T, odom_T) #(3,3) * (3,3) = (3,3)
+        #     #theta = acos(future_particle_T[1,1])
+        #     future_theta = (particles[i,2]) + odometry[2]
+        #     result[i, :] = np.array([[future_particle_T[0,2], future_particle_T[1,2], future_theta]]) #self.get_state(future_particle_T, odometry[2])
         ####################################
         return result
 
-    def get_rotation_mat(self, x, y, theta):
-        #return 1x3
-        result = np.zeros((3,3))
-        result[0,0] = cos(theta)
-        result[0,1] = -sin(theta)
-        result[1,0] = sin(theta)
-        result[1,1] = cos(theta)
+    # def get_rotation_mat(self, x, y, theta):
+    #     #return 1x3
+    #     result = np.zeros((3,3))
+    #     result[0,0] = cos(theta)
+    #     result[0,1] = -sin(theta)
+    #     result[1,0] = sin(theta)
+    #     result[1,1] = cos(theta)
 
-        result[0,2] = x
-        result[1,2] = y
-        result[2,2] = 1
-        return result
+    #     result[0,2] = x
+    #     result[1,2] = y
+    #     result[2,2] = 1
+    #     return result
 
     # def get_state(self, mat, dtheta):
     #     theta = acos(mat[1,0]) #atan2(mat[1,0], mat[0,0])
