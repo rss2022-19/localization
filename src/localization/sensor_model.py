@@ -1,3 +1,5 @@
+from ast import Num
+from math import sqrt
 import numpy as np
 from scan_simulator_2d import PyScanSimulator2D
 
@@ -19,14 +21,15 @@ class SensorModel:
         ####################################
         # TODO
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
+        self.z_max = 50
         ####################################
 
         # Precompute the sensor model table
@@ -69,7 +72,31 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        raise NotImplementedError
+        z = np.linspace(0, self.z_max, self.table_width)
+        z = np.repeat(np.expand_dims(z,0), self.table_width, 0).T
+
+        d = np.linspace(0, self.z_max, self.table_width)
+        d = np.repeat(np.expand_dims(d,0), self.table_width, 0)
+
+
+        # compute matrices
+        p_hit = (1/sqrt(2*np.pi*(self.sigma_hit)**2))*np.exp(-(z-d)**2/(2*self.sigma_hit**2)).T
+        p_short = np.where(z <= d, (2/d)*(1-(z/d)), 0)
+        p_max = np.where(z == self.z_max, 1, 0)
+        p_rand = np.ones((self.table_width, self.table_width))/self.z_max
+
+        # normalize p_hit 
+        for i in range(self.table_width):
+            p_hit[i, :] = p_hit[i, :]/np.sum(p_hit[i, :])
+
+        self.sensor_model_table = (self.alpha_hit*p_hit.T + self.alpha_short*p_short + self.alpha_max*p_max + self.alpha_rand*p_rand).T
+
+        for i in range(self.table_width):
+            self.sensor_model_table[i, :] = self.sensor_model_table[i, :]/np.sum(self.sensor_model_table[i, :])
+        self.sensor_model_table = self.sensor_model_table.T
+        print(self.sensor_model_table)
+
+        return None
 
     def evaluate(self, particles, observation):
         """
