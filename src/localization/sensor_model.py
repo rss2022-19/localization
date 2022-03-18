@@ -19,6 +19,7 @@ class SensorModel:
         self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
         self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
         self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
+        self.LIDAR_TO_MAP_SCALE = rospy.get_param("~lidar_scale_to_map_scale")
 
         ####################################mt
         # TODO
@@ -135,14 +136,8 @@ class SensorModel:
         scans = self.scan_sim.scan(particles) # ground truth 
 
         ####################################
-        z = np.linspace(0, self.z_max, self.table_width)
-        z = np.repeat(np.expand_dims(z,0), self.table_width, 0).T
-
-        d = np.linspace(0, self.z_max, self.table_width)
-        d = np.repeat(np.expand_dims(d,0), self.table_width, 0)
-
-        scans = scans/(self.resolution*1.0)
-        observation = observation/(self.resolution*1.0)
+        scans = scans/(float(self.resolution)*self.LIDAR_TO_MAP_SCALE)
+        observation = observation/(float(self.resolution)*self.LIDAR_TO_MAP_SCALE)
 
         #clip anything > zmax to zmax and anything <0 to 0
         scans = np.where(scans > self.z_max, self.z_max, scans)
@@ -150,27 +145,21 @@ class SensorModel:
         observation = np.where(observation > self.z_max, self.z_max, observation)
         observation = np.where(observation < 0, 0, observation)
 
-        # likelihood of a scan is  product of the likelihoods of each of range measurements in the scan
-        # iterate through each range measurement in scan of particle and compare it to the value in oberservation
-        # grab that value from sensor model table 
-        probabilities = []
-        for particle_scan in scans:
-            p_i = 1
-            for i in range(len(particle_scan)): # scan ground truth, aka d 
-                d_val = int(particle_scan[i])
-                z_val= int(observation[i])
-                print(z_val)
-                print(np.where(z[:, 0] == z_val))
-                print(d_val)
-                print(np.where(d[0] == d_val))
-                z_i = np.where(z[:, 0] == z_val)[0][0]
-                d_i = np.where(d[0] == d_val)[0][0]
+        d_vals = np.rint(scans).astype(np.uint16)
+        z_vals = np.rint(observation).astype(np.uint16)
+        p_array = self.sensor_model_table[z_vals, d_vals]
+        probabilities = np.power(np.prod(p_array, axis=1), 1/2.2)
 
-                p_i *= self.sensor_model_table[z_i][d_i]
-                
-            probabilities.append(p_i**(1/2.2))
+        # probabilities = []
+        # for particle_scan in scans:
+        #     p_i = 1
+        #     for i in range(len(particle_scan)): # scan ground truth, aka d 
+        #         d_val = int(particle_scan[i])
+        #         z_val= int(observation[i])
+        #         p_i *= self.sensor_model_table[z_val][d_val]
+        # probabilities.append(p_i**(1/2.2))
+
         return probabilities
-
 
 
     def map_callback(self, map_msg):
