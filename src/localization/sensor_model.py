@@ -76,16 +76,26 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        z = np.linspace(0, self.z_max, self.table_width)
+        z = np.linspace(0, self.z_max, self.table_width) 
         z = np.repeat(np.expand_dims(z,0), self.table_width, 0).T
 
         d = np.linspace(0, self.z_max, self.table_width)
+        d = d.astype(float)
         d = np.repeat(np.expand_dims(d,0), self.table_width, 0)
 
         # compute matrices
         p_hit = (1/sqrt(2*np.pi*(self.sigma_hit)**2))*np.exp(-(z-d)**2/(2*self.sigma_hit**2)).T
-        p_short = np.where(z <= d, (2/d)*(1-(z/d)), 0)
-        p_short = np.where(d==0, 0, p_short)
+        
+
+        #Modified to avoid divide by zero error
+        check_z = z[np.logical_and(z <= d, d > 0)]
+        check_d = d[np.logical_and(z <= d, d > 0)]
+        p_short = np.zeros_like(p_hit)
+        p_short[np.logical_and(z <= d, d > 0)] = (2.0/check_d) * (1.0 - (check_z/check_d))
+
+        # p_short = np.where((z <= d), (2/(d))*(1-(z/(d))), 0)
+        # p_short = np.where(d==0, 0, p_short)
+
         p_max = np.where(z == self.z_max, 1, 0)
         p_rand = np.ones((self.table_width, self.table_width))/self.z_max
 
