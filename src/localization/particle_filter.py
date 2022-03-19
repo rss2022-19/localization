@@ -63,7 +63,7 @@ class ParticleFilter:
         self.odom_pub  = rospy.Publisher("/pf/pose/odom", Odometry, queue_size = 1)
         
         # Initialize the models
-        self.motion_model = MotionModel()
+        self.motion_model = MotionModel(deterministic=False)
         self.sensor_model = SensorModel()
 
         # Implement the MCL algorithm
@@ -93,7 +93,7 @@ class ParticleFilter:
     def odom_callback(self, odometry):
         #update particles with motion model
 
-        #TODO: idk if this is right bruh
+        #TODO: idk if odometry calculation is right
         dtheta = atan2(odometry.twist.twist.angular.x, odometry.twist.twist.angular.y)
         u = np.array([odometry.twist.twist.linear.x, odometry.twist.twist.linear.y, dtheta])
 
@@ -103,9 +103,10 @@ class ParticleFilter:
 
 
     def pose_initialization_callback(self, data):
-        init_x, init_y = data.pose.position.x, data.pose.position.point.x
+        init_x, init_y = data.pose.position.x, data.pose.position.x
         init_rot_mat = tf_conversions.transformations.quaternion_matrix(data.pose.orientation)
         init_theta = atan2(init_rot_mat[0,0], init_rot_mat[1,0])
+
         self.initial_particles = np.random.normal(np.array([init_x, init_y, init_theta]), data.covariance, size=(self.NUMBER_OF_PARTICLES, 3))
 
     def get_3d_rot_matrix(self, x, y, theta):
@@ -127,6 +128,7 @@ class ParticleFilter:
         mean_theta = atan2(mean_cos.item(), mean_sin.item())
         #mean_particles = np.array([xy_mean[0], xy_mean[1], mean_theta])
 
+        #TODO: check transform is correct
         br = tf2_ros.TransformBroadcaster() #TODO: should we place in init function?
         t = TransformStamped()
 
@@ -143,6 +145,16 @@ class ParticleFilter:
         t.transform.rotation.w = q[3]
 
         br.sendTransform(t)
+
+        odom_msg = Odometry()
+        odom_msg.pose.pose.position.x = xy_mean[0]
+        odom_msg.pose.pose.position.y = xy_mean[1]
+        odom_msg.pose.pose.orientation.x = q[0]
+        odom_msg.pose.pose.orientation.y = q[1]
+        odom_msg.pose.pose.orientation.z = q[2]
+        odom_msg.pose.pose.orientation.w = q[3]
+
+        self.odom_pub.publish(odom_msg)
 
 
 if __name__ == "__main__":
