@@ -66,6 +66,8 @@ class ParticleFilter:
         self.motion_model = MotionModel(deterministic=False)
         self.sensor_model = SensorModel()
 
+        self.transform_broadcaster = tf2_ros.TransformBroadcaster()
+
         # Implement the MCL algorithm
         # using the sensor model and the motion model
         #
@@ -86,6 +88,7 @@ class ParticleFilter:
         # print("particle_probabilities:", np.sum(particle_probabilities))
         resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
         self.particles = self.particles[resampled_particles_indices, :]
+        #self.particles = np.unique(self.partices, axis=0)
 
         self.calculate_average_and_send_transform()
         
@@ -105,9 +108,12 @@ class ParticleFilter:
     def pose_initialization_callback(self, data):
         init_x, init_y = data.pose.position.x, data.pose.position.x
         init_rot_mat = tf_conversions.transformations.quaternion_matrix(data.pose.orientation)
+        # Questioning the atan2, maybe we just want to extract the Euler "yaw"
         init_theta = atan2(init_rot_mat[0,0], init_rot_mat[1,0])
 
-        self.initial_particles = np.random.normal(np.array([init_x, init_y, init_theta]), data.covariance, size=(self.NUMBER_OF_PARTICLES, 3))
+        self.init_data = np.array([init_x, init_y, init_theta])
+
+        self.initial_particles = np.random.normal(self.init_data, data.covariance, size=(self.NUMBER_OF_PARTICLES, 3))
 
     def get_3d_rot_matrix(self, x, y, theta):
         result = np.zeros((3,3))
@@ -122,6 +128,7 @@ class ParticleFilter:
         return result
 
     def calculate_average_and_send_transform(self):
+        # If we hit a bimodal distribution, how do we deal with it?
         xy_mean = np.mean(self.particles[:, 0:2], axis=0) #(2,)
         mean_sin = np.mean(np.sin(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_cos = np.mean(np.cos(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
@@ -129,7 +136,6 @@ class ParticleFilter:
         #mean_particles = np.array([xy_mean[0], xy_mean[1], mean_theta])
 
         #TODO: check transform is correct
-        br = tf2_ros.TransformBroadcaster() #TODO: should we place in init function?
         t = TransformStamped()
 
         t.header.stamp = rospy.Time.now()
@@ -144,7 +150,7 @@ class ParticleFilter:
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
 
-        br.sendTransform(t)
+        self.transform_broadcaster.sendTransform(t)
 
         odom_msg = Odometry()
         odom_msg.pose.pose.position.x = xy_mean[0]
