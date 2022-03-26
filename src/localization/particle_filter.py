@@ -97,7 +97,7 @@ class ParticleFilter:
         #update particles with motion model
 
         #TODO: idk if odometry calculation is right
-        dtheta = atan2(odometry.twist.twist.angular.x, odometry.twist.twist.angular.y)
+        dtheta = odometry.twist.twist.angular.z
         u = np.array([odometry.twist.twist.linear.x, odometry.twist.twist.linear.y, dtheta])
 
         self.particles = self.motion_model.evaluate(self.particles, u)
@@ -106,14 +106,17 @@ class ParticleFilter:
 
 
     def pose_initialization_callback(self, data):
-        init_x, init_y = data.pose.position.x, data.pose.position.x
-        init_rot_mat = tf_conversions.transformations.quaternion_matrix(data.pose.orientation)
-        # Questioning the atan2, maybe we just want to extract the Euler "yaw"
-        init_theta = atan2(init_rot_mat[0,0], init_rot_mat[1,0])
+        init_x, init_y = data.pose.pose.position.x, data.pose.pose.position.y
+        q = data.pose.pose.orientation
+        cov = data.pose.covariance
+        _, _, init_theta = tf_conversions.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
 
         self.init_data = np.array([init_x, init_y, init_theta])
 
-        self.initial_particles = np.random.normal(self.init_data, data.covariance, size=(self.NUMBER_OF_PARTICLES, 3))
+        self.particles = np.random.normal(self.init_data, np.sqrt(np.array([cov[0], cov[6 + 1], cov[6 * 5 + 5]])), (self.NUMBER_OF_PARTICLES, 3))
+
+        print(self.particles)
+        print(self.init_data)
 
     def get_3d_rot_matrix(self, x, y, theta):
         result = np.zeros((3,3))
@@ -132,11 +135,16 @@ class ParticleFilter:
         xy_mean = np.mean(self.particles[:, 0:2], axis=0) #(2,)
         mean_sin = np.mean(np.sin(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_cos = np.mean(np.cos(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
-        mean_theta = atan2(mean_cos.item(), mean_sin.item())
+        mean_theta = atan2(mean_sin.item(), mean_cos.item())
         #mean_particles = np.array([xy_mean[0], xy_mean[1], mean_theta])
+
+        print(self.particles[:, 0:2])
+        print(xy_mean, mean_theta)
 
         #TODO: check transform is correct
         t = TransformStamped()
+
+        q = tf_conversions.transformations.quaternion_from_euler(0, 0, mean_theta)
 
         t.header.stamp = rospy.Time.now()
         t.header.frame_id = "/map"
@@ -144,7 +152,7 @@ class ParticleFilter:
         t.transform.translation.x = xy_mean[0]
         t.transform.translation.y = xy_mean[1]
         t.transform.translation.z = 0.0
-        q = tf_conversions.transformations.quaternion_from_euler(xy_mean[0], xy_mean[1], mean_theta)
+        
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
@@ -153,6 +161,7 @@ class ParticleFilter:
         self.transform_broadcaster.sendTransform(t)
 
         odom_msg = Odometry()
+        odom_msg.header.frame_id = "/map"
         odom_msg.pose.pose.position.x = xy_mean[0]
         odom_msg.pose.pose.position.y = xy_mean[1]
         odom_msg.pose.pose.orientation.x = q[0]
