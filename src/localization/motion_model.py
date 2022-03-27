@@ -13,7 +13,7 @@ class MotionModel:
         # model here.
         # pass
 
-        self.deterministic = True #deterministic
+        self.deterministic = deterministic #deterministic
                                    # set True to past unit test
         ####################################
 
