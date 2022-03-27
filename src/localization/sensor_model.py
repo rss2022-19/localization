@@ -16,10 +16,10 @@ class SensorModel:
         # Fetch parameters
         self.map_topic = rospy.get_param("~map_topic")
         # self.map_sub = rospy.Subscriber(self.map_topic, OccupancyGrid, self.map_callback)
-        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
-        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
-        self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
-        self.LIDAR_TO_MAP_SCALE = rospy.get_param("~lidar_scale_to_map_scale")
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle", 100)
+        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization", 500)
+        self.scan_field_of_view = rospy.get_param("~scan_field_of_view", 4.71)
+        self.LIDAR_TO_MAP_SCALE = rospy.get_param("~lidar_scale_to_map_scale", 1.0)
 
         ####################################mt
         # TODO

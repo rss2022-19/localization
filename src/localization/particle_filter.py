@@ -7,10 +7,9 @@ from motion_model import MotionModel
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
-import tf_conversions
-import tf2_ros
+from tf2_ros import TransformBroadcaster
 from math import atan2, cos, sin
-
+from scipy.spatial.transform import Rotation as R
 
 import numpy as np
 
@@ -63,10 +62,10 @@ class ParticleFilter:
         self.odom_pub  = rospy.Publisher("/pf/pose/odom", Odometry, queue_size = 1)
         
         # Initialize the models
-        self.motion_model = MotionModel(deterministic=False)
+        self.motion_model = MotionModel(deterministic=rospy.get_param("~deterministic", True))
         self.sensor_model = SensorModel()
 
-        self.transform_broadcaster = tf2_ros.TransformBroadcaster()
+        self.transform_broadcaster = TransformBroadcaster()
 
         # Implement the MCL algorithm
         # using the sensor model and the motion model
@@ -77,7 +76,7 @@ class ParticleFilter:
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
-    
+        self.calculate_average_and_send_transform()
     
     def lidar_callback(self, lidar_scan):
         #update particles with sensor model
@@ -109,7 +108,8 @@ class ParticleFilter:
         init_x, init_y = data.pose.pose.position.x, data.pose.pose.position.y
         q = data.pose.pose.orientation
         cov = data.pose.covariance
-        _, _, init_theta = tf_conversions.transformations.euler_from_quaternion([q.x, q.y, q.z, q.w])
+        r = R.from_quat([q.x, q.y, q.z, q.w])
+        init_theta = r.as_euler('Z')
 
         self.init_data = np.array([init_x, init_y, init_theta])
 
@@ -144,11 +144,11 @@ class ParticleFilter:
         #TODO: check transform is correct
         t = TransformStamped()
 
-        q = tf_conversions.transformations.quaternion_from_euler(0, 0, mean_theta)
+        q = R.from_euler('Z', mean_theta, degrees=False).as_quat()
 
         t.header.stamp = rospy.Time.now()
         t.header.frame_id = "/map"
-        t.child_frame_id = "/base_link_pf" #TODO: generalize for simulator & car
+        t.child_frame_id = self.particle_filter_frame #TODO: generalize for simulator & car
         t.transform.translation.x = xy_mean[0]
         t.transform.translation.y = xy_mean[1]
         t.transform.translation.z = 0.0
