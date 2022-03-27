@@ -76,7 +76,7 @@ class ParticleFilter:
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
-        self.calculate_average_and_send_transform()
+        # self.calculate_average_and_send_transform()
     
     def lidar_callback(self, lidar_scan):
         #update particles with sensor model
@@ -109,13 +109,13 @@ class ParticleFilter:
         q = data.pose.pose.orientation
         cov = data.pose.covariance
         r = R.from_quat([q.x, q.y, q.z, q.w])
-        init_theta = r.as_euler('Z')
+        init_theta = r.as_euler('XYZ')[2]
 
         self.init_data = np.array([init_x, init_y, init_theta])
 
         self.particles = np.random.normal(self.init_data, np.sqrt(np.array([cov[0], cov[6 + 1], cov[6 * 5 + 5]])), (self.NUMBER_OF_PARTICLES, 3))
 
-        print(self.particles)
+        #print(self.particles)
         print(self.init_data)
 
     def get_3d_rot_matrix(self, x, y, theta):
@@ -138,8 +138,8 @@ class ParticleFilter:
         mean_theta = atan2(mean_sin.item(), mean_cos.item())
         #mean_particles = np.array([xy_mean[0], xy_mean[1], mean_theta])
 
-        print(self.particles[:, 0:2])
-        print(xy_mean, mean_theta)
+        #print(self.particles[:, 0:2])
+        #print(xy_mean, mean_theta)
 
         #TODO: check transform is correct
         t = TransformStamped()
