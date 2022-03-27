@@ -4,7 +4,7 @@ import rospy
 
 class MotionModel:
 
-    def __init__(self, deterministic=False):
+    def __init__(self, deterministic=True):
         # self.ODOM_TOPIC 
 
         ####################################
