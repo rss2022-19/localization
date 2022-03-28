@@ -16,7 +16,7 @@ import numpy as np
 class ParticleFilter:
     def __init__(self):
         # OUR PARAMETERS
-        self.NUMBER_OF_PARTICLES = rospy.get_param("~num_particles", 200) #200
+        self.NUMBER_OF_PARTICLES = rospy.get_param("~num_particles", 500) #200
         self.particles = np.zeros((self.NUMBER_OF_PARTICLES, 3))
         # self.odometry = np.zeros((3,)) #[dx, dy, dtheta]
         # self.observation = #vector of lidar data; TODO: unknown size? 
@@ -85,14 +85,15 @@ class ParticleFilter:
         observation = np.array(lidar_scan.ranges) #TODO: do we need to do further filtering?
         # print("observation:", np.array(observation).shape)
         particle_probabilities = self.sensor_model.evaluate(self.particles, observation) #vector of length N
-        particle_probabilities = particle_probabilities/np.sum(particle_probabilities)
-        # print("particle_probabilities:", np.sum(particle_probabilities))
-        resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
-        self.particles = self.particles[resampled_particles_indices, :]
-        #self.particles = np.unique(self.partices, axis=0)
+        
+        if particle_probabilities is not None:
+            particle_probabilities = particle_probabilities/np.sum(particle_probabilities)
+            # print("particle_probabilities:", np.sum(particle_probabilities))
+            resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
+            self.particles = self.particles[resampled_particles_indices, :]
+            #self.particles = np.unique(self.partices, axis=0)
 
-        self.calculate_average_and_send_transform()
-        pass
+            self.calculate_average_and_send_transform()
         
 
     def odom_callback(self, odometry):
