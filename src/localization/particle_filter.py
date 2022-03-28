@@ -66,6 +66,8 @@ class ParticleFilter:
         self.sensor_model = SensorModel()
 
         self.transform_broadcaster = TransformBroadcaster()
+        
+        self.lasttime_odom = 0
 
         # Implement the MCL algorithm
         # using the sensor model and the motion model
@@ -90,19 +92,28 @@ class ParticleFilter:
         #self.particles = np.unique(self.partices, axis=0)
 
         self.calculate_average_and_send_transform()
+        pass
         
 
     def odom_callback(self, odometry):
         #update particles with motion model
-
-        #TODO: idk if odometry calculation is right
-        dtheta = odometry.twist.twist.angular.z
-        u = np.array([odometry.twist.twist.linear.x, odometry.twist.twist.linear.y, dtheta])
-
-        self.particles = self.motion_model.evaluate(self.particles, u)
-
-        self.calculate_average_and_send_transform()
-
+        
+        time = odometry.header.stamp.secs
+        dt = time-self.lasttime_odom
+        
+        if (dt > 1.0):
+            self.lasttime_odom = time
+        else:
+            #TODO: idk if odometry calculation is right
+            
+            dtheta = odometry.twist.twist.angular.z*dt
+            u = np.array([odometry.twist.twist.linear.x*dt, odometry.twist.twist.linear.y*dt, dtheta])
+    
+            self.particles = self.motion_model.evaluate(self.particles, u)
+    
+            self.calculate_average_and_send_transform()
+            
+            self.lasttime_odom = time
 
     def pose_initialization_callback(self, data):
         init_x, init_y = data.pose.pose.position.x, data.pose.pose.position.y

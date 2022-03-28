@@ -45,9 +45,9 @@ class MotionModel:
         
 
         #Add gaussian noise
-        self.x_spread = rospy.get_param("x_spread", 1.)
-        self.y_spread = rospy.get_param("y_spread", 1.)
-        self.theta_spread = rospy.get_param("theta_spread", 3.14/2)
+        self.x_spread = rospy.get_param("x_spread", 0.1)
+        self.y_spread = rospy.get_param("y_spread", 0.1)
+        self.theta_spread = rospy.get_param("theta_spread", 3.14/50)
         
         if self.deterministic == False:
             result[:, 0] += np.clip(np.random.normal(0, self.x_spread, N), -self.x_spread*3,self.x_spread*3)
