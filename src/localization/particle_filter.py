@@ -134,18 +134,6 @@ class ParticleFilter:
         #print(self.particles)
         print(self.init_data)
 
-    def get_3d_rot_matrix(self, x, y, theta):
-        result = np.zeros((3,3))
-        result[0,0] = cos(theta)
-        result[0,1] = -sin(theta)
-        result[1,0] = sin(theta)
-        result[1,1] = cos(theta)
-
-        result[0,2] = x
-        result[1,2] = y
-        result[2,2] = 1
-        return result
-
     def calculate_average_and_send_transform(self):
         # If we hit a bimodal distribution, how do we deal with it?
         xy_mean = self.paricles[np.where(np.max(self.particle_priors)), 0:2] #(2,)
