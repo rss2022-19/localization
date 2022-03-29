@@ -18,6 +18,7 @@ class ParticleFilter:
         # OUR PARAMETERS
         self.NUMBER_OF_PARTICLES = rospy.get_param("~num_particles", 500) #200
         self.particles = np.zeros((self.NUMBER_OF_PARTICLES, 3))
+        self.particle_priors = np.ones(self.NUMBER_OF_PARTICLES) * (1/self.NUMBER_OF_PARTICLES)
         # self.odometry = np.zeros((3,)) #[dx, dy, dtheta]
         # self.observation = #vector of lidar data; TODO: unknown size? 
 
@@ -87,7 +88,10 @@ class ParticleFilter:
         particle_probabilities = self.sensor_model.evaluate(self.particles, observation) #vector of length N
         
         if particle_probabilities is not None:
-            particle_probabilities = particle_probabilities/np.sum(particle_probabilities)
+            normalization = np.sum(particle_probabilities)
+            particle_probabilities = self.particle_priors*particle_probabilities/normalization
+            # Posterior becomes new prior
+            self.particle_priors = particle_probabilities
             # print("particle_probabilities:", np.sum(particle_probabilities))
             resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
             self.particles = self.particles[resampled_particles_indices, :]
@@ -144,7 +148,7 @@ class ParticleFilter:
 
     def calculate_average_and_send_transform(self):
         # If we hit a bimodal distribution, how do we deal with it?
-        xy_mean = np.mean(self.particles[:, 0:2], axis=0) #(2,)
+        xy_mean = self.paricles[np.where(np.max(self.particle_priors)), 0:2] #(2,)
         mean_sin = np.mean(np.sin(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_cos = np.mean(np.cos(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_theta = atan2(mean_sin.item(), mean_cos.item())
