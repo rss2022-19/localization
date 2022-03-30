@@ -7,6 +7,7 @@ from motion_model import MotionModel
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped, TransformStamped
+from visualization_msgs.msg import MarkerArray, Marker
 from tf2_ros import TransformBroadcaster
 from math import atan2, cos, sin
 from scipy.spatial.transform import Rotation as R
@@ -18,7 +19,7 @@ class ParticleFilter:
         # OUR PARAMETERS
         self.NUMBER_OF_PARTICLES = rospy.get_param("~num_particles", 500) #200
         self.particles = np.zeros((self.NUMBER_OF_PARTICLES, 3))
-        self.particle_priors = np.ones(self.NUMBER_OF_PARTICLES) * (1/self.NUMBER_OF_PARTICLES)
+        self.particle_priors = np.ones(self.NUMBER_OF_PARTICLES) * (1.0/self.NUMBER_OF_PARTICLES)
         # self.odometry = np.zeros((3,)) #[dx, dy, dtheta]
         # self.observation = #vector of lidar data; TODO: unknown size? 
 
@@ -68,6 +69,8 @@ class ParticleFilter:
 
         self.transform_broadcaster = TransformBroadcaster()
         
+        self.marker_pub = rospy.Publisher("/visualization_array_msg", MarkerArray, queue_size = 1)
+        
         self.lasttime_odom = 0
 
         # Implement the MCL algorithm
@@ -88,13 +91,14 @@ class ParticleFilter:
         particle_probabilities = self.sensor_model.evaluate(self.particles, observation) #vector of length N
         
         if particle_probabilities is not None:
-            normalization = np.sum(particle_probabilities)
+            normalization = np.sum(self.particle_priors*particle_probabilities)
             particle_probabilities = self.particle_priors*particle_probabilities/normalization
             # Posterior becomes new prior
             self.particle_priors = particle_probabilities
             # print("particle_probabilities:", np.sum(particle_probabilities))
             resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
             self.particles = self.particles[resampled_particles_indices, :]
+            self.particle_priors = self.particle_priors[resampled_particles_indices]
             #self.particles = np.unique(self.partices, axis=0)
 
             self.calculate_average_and_send_transform()
@@ -136,14 +140,14 @@ class ParticleFilter:
 
     def calculate_average_and_send_transform(self):
         # If we hit a bimodal distribution, how do we deal with it?
-        xy_mean = self.paricles[np.where(np.max(self.particle_priors)), 0:2] #(2,)
+        xy_mean = np.mean(self.particles[np.where(self.particle_priors == np.max(self.particle_priors))][0:2], axis = 0) #(2,)
         mean_sin = np.mean(np.sin(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_cos = np.mean(np.cos(self.particles[:, 2:3]), axis=0) #(1,)   #, keepdims=True)
         mean_theta = atan2(mean_sin.item(), mean_cos.item())
         #mean_particles = np.array([xy_mean[0], xy_mean[1], mean_theta])
 
         #print(self.particles[:, 0:2])
-        #print(xy_mean, mean_theta)
+        # print(xy_mean, mean_theta)
 
         #TODO: check transform is correct
         t = TransformStamped()
@@ -165,6 +169,7 @@ class ParticleFilter:
         self.transform_broadcaster.sendTransform(t)
 
         odom_msg = Odometry()
+        odom_msg.header.stamp = rospy.Time.now()
         odom_msg.header.frame_id = "/map"
         odom_msg.pose.pose.position.x = xy_mean[0]
         odom_msg.pose.pose.position.y = xy_mean[1]
@@ -174,6 +179,40 @@ class ParticleFilter:
         odom_msg.pose.pose.orientation.w = q[3]
 
         self.odom_pub.publish(odom_msg)
+        
+        ids = np.arange(0, self.NUMBER_OF_PARTICLES)
+        markers = np.vectorize(self.draw_marker, signature="(),(n),(),()->()")(ids, self.particles[:, 0:2], self.particles[:, 2], self.particle_priors)
+        m = MarkerArray()
+        m.markers = list(markers)
+        
+        self.marker_pub.publish(m)
+        
+    def draw_marker(self, id, pos, theta, prob):
+        m = Marker()
+        q = R.from_euler('Z', theta, degrees=False).as_quat()
+        
+        m.header.stamp = rospy.Time()
+        m.header.frame_id = "/map"
+        m.ns = "pf_markers"
+        m.id = id
+        m.type = Marker.ARROW
+        m.action = Marker.ADD
+        m.pose.position.x = pos[0]
+        m.pose.position.y = pos[1]
+        m.pose.position.z = prob
+        m.scale.x = 0.1
+        m.scale.y = 0.1
+        m.scale.z = 0.1
+        m.pose.orientation.x = q[0]
+        m.pose.orientation.y = q[1]
+        m.pose.orientation.z = q[2]
+        m.pose.orientation.w = q[3]
+        m.color.r = 1
+        m.color.b = 1
+        m.color.g = 0
+        m.color.a = 1
+        
+        return m
 
 
 if __name__ == "__main__":
