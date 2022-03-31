@@ -16,10 +16,10 @@ class SensorModel:
         # Fetch parameters
         self.map_topic = rospy.get_param("~map_topic")
         # self.map_sub = rospy.Subscriber(self.map_topic, OccupancyGrid, self.map_callback)
-        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle")
-        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization")
-        self.scan_field_of_view = rospy.get_param("~scan_field_of_view")
-        self.LIDAR_TO_MAP_SCALE = rospy.get_param("~lidar_scale_to_map_scale")
+        self.num_beams_per_particle = rospy.get_param("~num_beams_per_particle", 100)
+        self.scan_theta_discretization = rospy.get_param("~scan_theta_discretization", 500)
+        self.scan_field_of_view = rospy.get_param("~scan_field_of_view", 4.71)
+        self.LIDAR_TO_MAP_SCALE = rospy.get_param("~lidar_scale_to_map_scale", 1.0)
 
         ####################################mt
         # TODO
@@ -76,16 +76,26 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-        z = np.linspace(0, self.z_max, self.table_width)
+        z = np.linspace(0, self.z_max, self.table_width) 
         z = np.repeat(np.expand_dims(z,0), self.table_width, 0).T
 
         d = np.linspace(0, self.z_max, self.table_width)
+        d = d.astype(float)
         d = np.repeat(np.expand_dims(d,0), self.table_width, 0)
 
         # compute matrices
         p_hit = (1/sqrt(2*np.pi*(self.sigma_hit)**2))*np.exp(-(z-d)**2/(2*self.sigma_hit**2)).T
-        p_short = np.where(z <= d, (2/d)*(1-(z/d)), 0)
-        p_short = np.where(d==0, 0, p_short)
+        
+
+        #Modified to avoid divide by zero error
+        check_z = z[np.logical_and(z <= d, d > 0)]
+        check_d = d[np.logical_and(z <= d, d > 0)]
+        p_short = np.zeros_like(p_hit)
+        p_short[np.logical_and(z <= d, d > 0)] = (2.0/check_d) * (1.0 - (check_z/check_d))
+
+        # p_short = np.where((z <= d), (2/(d))*(1-(z/(d))), 0)
+        # p_short = np.where(d==0, 0, p_short)
+
         p_max = np.where(z == self.z_max, 1, 0)
         p_rand = np.ones((self.table_width, self.table_width))/self.z_max
 
