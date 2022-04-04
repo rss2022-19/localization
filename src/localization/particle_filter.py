@@ -3,6 +3,7 @@
 import rospy
 from sensor_model import SensorModel
 from motion_model import MotionModel
+from threading import Lock
 
 from sensor_msgs.msg import LaserScan
 from nav_msgs.msg import Odometry
@@ -20,6 +21,7 @@ class ParticleFilter:
         self.NUMBER_OF_PARTICLES = rospy.get_param("~num_particles", 500) #200
         self.particles = np.zeros((self.NUMBER_OF_PARTICLES, 3))
         self.particle_priors = np.ones(self.NUMBER_OF_PARTICLES) * (1.0/self.NUMBER_OF_PARTICLES)
+        self.particle_lock = Lock()
         # self.odometry = np.zeros((3,)) #[dx, dy, dtheta]
         # self.observation = #vector of lidar data; TODO: unknown size? 
 
@@ -87,22 +89,24 @@ class ParticleFilter:
     def lidar_callback(self, lidar_scan):
         #update particles with sensor model
         observation = np.array(lidar_scan.ranges) #TODO: do we need to do further filtering?
-        # print("observation:", np.array(observation).shape)
-        particle_probabilities = self.sensor_model.evaluate(self.particles, observation) #vector of length N
-        
-        if particle_probabilities is not None:
-            normalization = np.sum(self.particle_priors*particle_probabilities)
-            particle_probabilities = self.particle_priors*particle_probabilities/normalization
-            # Posterior becomes new prior
-            self.particle_priors = particle_probabilities
-            # print("particle_probabilities:", np.sum(particle_probabilities))
-            resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
-            self.particles = self.particles[resampled_particles_indices, :]
-            self.particle_priors = self.particle_priors[resampled_particles_indices]
-            #self.particles = np.unique(self.partices, axis=0)
 
-            self.calculate_average_and_send_transform()
-        
+        with self.particle_lock:
+            # print("observation:", np.array(observation).shape)
+            particle_probabilities = self.sensor_model.evaluate(self.particles, observation) #vector of length N
+            
+            if particle_probabilities is not None:
+                normalization = np.sum(self.particle_priors*particle_probabilities)
+                particle_probabilities = self.particle_priors*particle_probabilities/normalization
+                # Posterior becomes new prior
+                self.particle_priors = particle_probabilities
+                # print("particle_probabilities:", np.sum(particle_probabilities))
+                resampled_particles_indices = np.random.choice(self.NUMBER_OF_PARTICLES, (self.NUMBER_OF_PARTICLES,), p=particle_probabilities)
+                self.particles = self.particles[resampled_particles_indices, :]
+                self.particle_priors = self.particle_priors[resampled_particles_indices]
+                #self.particles = np.unique(self.partices, axis=0)
+
+        self.calculate_average_and_send_transform()
+            
 
     def odom_callback(self, odometry):
         #update particles with motion model
@@ -117,8 +121,9 @@ class ParticleFilter:
             
             dtheta = odometry.twist.twist.angular.z*dt
             u = np.array([odometry.twist.twist.linear.x*dt, odometry.twist.twist.linear.y*dt, dtheta])
-    
-            self.particles = self.motion_model.evaluate(self.particles, u)
+
+            with self.particle_lock:
+                self.particles = self.motion_model.evaluate(self.particles, u)
     
             self.calculate_average_and_send_transform()
             
@@ -133,7 +138,8 @@ class ParticleFilter:
 
         self.init_data = np.array([init_x, init_y, init_theta])
 
-        self.particles = np.random.normal(self.init_data, np.sqrt(np.array([cov[0], cov[6 + 1], cov[6 * 5 + 5]])), (self.NUMBER_OF_PARTICLES, 3))
+        with self.particle_lock:
+            self.particles = np.random.normal(self.init_data, np.sqrt(np.array([cov[0], cov[6 + 1], cov[6 * 5 + 5]])), (self.NUMBER_OF_PARTICLES, 3))
 
         #print(self.particles)
         print(self.init_data)
